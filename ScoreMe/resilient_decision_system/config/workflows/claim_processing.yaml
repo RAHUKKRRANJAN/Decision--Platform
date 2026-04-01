@@ -1,0 +1,107 @@
+workflow_id: claim_processing
+workflow_name: Claim Processing
+version: 1.0.0
+description: Process insurance claims using configurable document and policy checks.
+entry_stage: claim_intake
+input_schema:
+  claim_id: str
+  policy_active: bool
+  claim_amount: float
+  days_since_incident: int
+  document_count: int
+  claimant_id: str
+stages:
+  - stage_id: claim_intake
+    stage_name: Claim Intake
+    rules:
+      - rule_policy_active
+      - rule_claim_amount
+      - rule_incident_days
+      - rule_claimant_exists
+    on_success: document_verification
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: false
+
+  - stage_id: document_verification
+    stage_name: Document Verification
+    rules:
+      - rule_document_count
+    on_success: damage_assessment
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: true
+
+  - stage_id: damage_assessment
+    stage_name: Damage Assessment
+    rules: []
+    on_success: payout_decision
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: false
+
+  - stage_id: payout_decision
+    stage_name: Payout Decision
+    rules: []
+    on_success: DONE
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: false
+
+rules:
+  - rule_id: rule_policy_active
+    description: Policy must be active
+    rule_type: mandatory_check
+    field: policy_active
+    operator: eq
+    value: true
+    on_fail: reject
+    error_message: Policy is inactive.
+
+  - rule_id: rule_claim_amount
+    description: Claim amount must be at most 1000000
+    rule_type: threshold_check
+    field: claim_amount
+    operator: lte
+    value: 1000000
+    on_fail: manual_review
+    error_message: Claim amount exceeds automatic processing limit.
+
+  - rule_id: rule_incident_days
+    description: Incident must be reported within 30 days
+    rule_type: threshold_check
+    field: days_since_incident
+    operator: lte
+    value: 30
+    on_fail: reject
+    error_message: Incident reported too late.
+
+  - rule_id: rule_document_count
+    description: At least two documents are required
+    rule_type: mandatory_check
+    field: document_count
+    operator: gte
+    value: 2
+    on_fail: retry
+    error_message: Insufficient supporting documents.
+
+  - rule_id: rule_claimant_exists
+    description: Claimant id must exist
+    rule_type: mandatory_check
+    field: claimant_id
+    operator: exists
+    value: true
+    on_fail: reject
+    error_message: Claimant ID is required.

@@ -1,0 +1,101 @@
+workflow_id: employee_onboarding
+workflow_name: Employee Onboarding
+version: 1.0.0
+description: Validate and onboard employees with configurable HR workflow stages.
+entry_stage: profile_validation
+input_schema:
+  employee_id: str
+  employee_email: str
+  department: str
+  start_date: str
+  salary: float
+stages:
+  - stage_id: profile_validation
+    stage_name: Profile Validation
+    rules:
+      - rule_employee_email
+      - rule_department_allowed
+      - rule_start_date
+      - rule_salary_minimum
+    on_success: background_check
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: false
+
+  - stage_id: background_check
+    stage_name: Background Check
+    rules: []
+    on_success: it_provisioning
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: true
+
+  - stage_id: it_provisioning
+    stage_name: IT Provisioning
+    rules: []
+    on_success: hr_final_approval
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: false
+
+  - stage_id: hr_final_approval
+    stage_name: HR Final Approval
+    rules: []
+    on_success: DONE
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: false
+
+rules:
+  - rule_id: rule_employee_email
+    description: Employee email must exist
+    rule_type: mandatory_check
+    field: employee_email
+    operator: exists
+    value: true
+    on_fail: reject
+    error_message: Employee email is required.
+
+  - rule_id: rule_department_allowed
+    description: Department must be one of approved departments
+    rule_type: conditional_branch
+    field: department
+    operator: in
+    value:
+      - engineering
+      - marketing
+      - sales
+      - hr
+      - finance
+    on_fail: reject
+    error_message: Department is not eligible for onboarding workflow.
+
+  - rule_id: rule_start_date
+    description: Start date must exist
+    rule_type: mandatory_check
+    field: start_date
+    operator: exists
+    value: true
+    on_fail: reject
+    error_message: Start date is required.
+
+  - rule_id: rule_salary_minimum
+    description: Salary must be at least 30000
+    rule_type: threshold_check
+    field: salary
+    operator: gte
+    value: 30000
+    on_fail: manual_review
+    error_message: Salary is below onboarding policy threshold.

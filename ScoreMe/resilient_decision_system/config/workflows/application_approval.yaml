@@ -1,0 +1,120 @@
+workflow_id: application_approval
+workflow_name: Application Approval
+version: 1.0.0
+description: Evaluate loan and credit applications through configurable policy rules.
+entry_stage: intake_validation
+input_schema:
+  applicant_id: str
+  applicant_age: int
+  credit_score: int
+  requested_amount: float
+  income: float
+  employment_status: str
+  debt_to_income_ratio: float
+stages:
+  - stage_id: intake_validation
+    stage_name: Intake Validation
+    rules:
+      - rule_age_check
+      - rule_amount_cap
+      - rule_income_exists
+    on_success: credit_check
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: false
+
+  - stage_id: credit_check
+    stage_name: Credit Check
+    rules:
+      - rule_credit_score
+    on_success: fraud_check
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: true
+
+  - stage_id: fraud_check
+    stage_name: Fraud Check
+    rules:
+      - rule_employment_status
+      - rule_dti_ratio
+    on_success: final_decision
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: false
+
+  - stage_id: final_decision
+    stage_name: Final Decision
+    rules: []
+    on_success: DONE
+    on_reject: REJECTED
+    on_manual_review: MANUAL_REVIEW
+    on_retry: RETRY
+    max_retries: 3
+    retry_delay_seconds: 1.0
+    requires_external_check: false
+
+rules:
+  - rule_id: rule_age_check
+    description: Applicant must be 18 or older
+    rule_type: mandatory_check
+    field: applicant_age
+    operator: gte
+    value: 18
+    on_fail: reject
+    error_message: Applicant must be at least 18 years old.
+
+  - rule_id: rule_credit_score
+    description: Credit score must be at least 650
+    rule_type: threshold_check
+    field: credit_score
+    operator: gte
+    value: 650
+    on_fail: manual_review
+    error_message: Credit score below minimum threshold.
+
+  - rule_id: rule_amount_cap
+    description: Requested amount must be at most 500000
+    rule_type: threshold_check
+    field: requested_amount
+    operator: lte
+    value: 500000
+    on_fail: reject
+    error_message: Requested amount exceeds approval cap.
+
+  - rule_id: rule_income_exists
+    description: Income field must be present
+    rule_type: mandatory_check
+    field: income
+    operator: exists
+    value: true
+    on_fail: reject
+    error_message: Income is required.
+
+  - rule_id: rule_employment_status
+    description: Employment status must be employed or self_employed
+    rule_type: conditional_branch
+    field: employment_status
+    operator: in
+    value:
+      - employed
+      - self_employed
+    on_fail: manual_review
+    error_message: Employment status requires manual review.
+
+  - rule_id: rule_dti_ratio
+    description: Debt-to-income ratio must be at most 0.43
+    rule_type: threshold_check
+    field: debt_to_income_ratio
+    operator: lte
+    value: 0.43
+    on_fail: manual_review
+    error_message: Debt-to-income ratio exceeds policy threshold.
